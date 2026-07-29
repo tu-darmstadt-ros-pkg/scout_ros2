@@ -12,6 +12,8 @@
 #include "scout_base/scout_messenger.hpp"
 #include "ugv_sdk/utilities/protocol_detector.hpp"
 
+#include <rclcpp/executors/single_threaded_executor.hpp>
+
 namespace westonrobot {
 ScoutBaseRos::ScoutBaseRos(std::string node_name)
     : rclcpp::Node(node_name), keep_running_(false) {
@@ -21,6 +23,7 @@ ScoutBaseRos::ScoutBaseRos(std::string node_name)
   this->declare_parameter("base_frame", "base_link");
   this->declare_parameter("odom_topic_name", "odom");
   this->declare_parameter("cmd_vel_stamped", false);
+  this->declare_parameter("publish_tf", true);
 
   this->declare_parameter("is_scout_mini", false);
   this->declare_parameter("is_omni_wheel", false);
@@ -39,6 +42,7 @@ void ScoutBaseRos::LoadParameters() {
   this->get_parameter<std::string>("base_frame", base_frame_);
   this->get_parameter<std::string>("odom_topic_name", odom_topic_name_);
   this->get_parameter<bool>("cmd_vel_stamped", cmd_vel_stamped_);
+  this->get_parameter<bool>("publish_tf", publish_tf_);
 
   this->get_parameter<bool>("is_scout_mini", is_scout_mini_);
   this->get_parameter<bool>("is_omni_wheel", is_omni_wheel_);
@@ -54,6 +58,8 @@ void ScoutBaseRos::LoadParameters() {
   RCLCPP_INFO_STREAM(this->get_logger(),
                      "- odom topic name: " << odom_topic_name_);
   RCLCPP_INFO_STREAM(this->get_logger(), "- cmd vel stamped: " << cmd_vel_stamped_);
+  RCLCPP_INFO_STREAM(this->get_logger(),
+                     "- publish tf: " << std::boolalpha << publish_tf_);
 
   RCLCPP_INFO_STREAM(this->get_logger(),
                      "- is scout mini: " << std::boolalpha << is_scout_mini_);
@@ -143,6 +149,7 @@ void ScoutBaseRos::Run() {
     messenger->SetBaseFrame(base_frame_);
     messenger->SetOdometryTopicName(odom_topic_name_);
     messenger->SetCmdVelStamped(cmd_vel_stamped_);
+    messenger->SetPublishTf(publish_tf_);
     if (simulated_robot_) messenger->SetSimulationMode(sim_control_rate_);
 
     // connect to robot and setup ROS subscription
@@ -167,15 +174,18 @@ void ScoutBaseRos::Run() {
     AgxControlMode robot_control;
     keep_running_ = true;
     rclcpp::Rate rate(50);
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(shared_from_this());
     while (keep_running_) {
       messenger->PublishStateToROS();
       robot_control = robot_->GetRobotState().system_state.control_mode;
       if (auto_reconnect_ && robot_control == CONTROL_MODE_STANDBY) {
         robot_->EnableCommandedMode();
       }
-      rclcpp::spin_some(shared_from_this());
+      executor.spin_some();
       rate.sleep();
     }
+    executor.remove_node(shared_from_this());
   } else {
     std::unique_ptr<ScoutMessenger<ScoutMiniOmniRobot>> messenger =
         std::unique_ptr<ScoutMessenger<ScoutMiniOmniRobot>>(
@@ -184,6 +194,7 @@ void ScoutBaseRos::Run() {
     messenger->SetOdometryFrame(odom_frame_);
     messenger->SetBaseFrame(base_frame_);
     messenger->SetOdometryTopicName(odom_topic_name_);
+    messenger->SetPublishTf(publish_tf_);
     if (simulated_robot_) messenger->SetSimulationMode(sim_control_rate_);
 
     // connect to robot and setup ROS subscription
@@ -207,11 +218,14 @@ void ScoutBaseRos::Run() {
     messenger->SetupSubscription();
     rclcpp::Rate rate(50);
     keep_running_ = true;
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(shared_from_this());
     while (keep_running_) {
       messenger->PublishStateToROS();
-      rclcpp::spin_some(shared_from_this());
+      executor.spin_some();
       rate.sleep();
     }
+    executor.remove_node(shared_from_this());
   }
 }
 }  // namespace westonrobot

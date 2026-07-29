@@ -38,6 +38,7 @@ class ScoutMessenger {
     void SetBaseFrame(std::string frame) { base_frame_ = frame; }
     void SetOdometryTopicName(std::string name) { odom_topic_name_ = name; }
     void SetCmdVelStamped(bool value) { cmd_vel_stamped_ = value; }
+    void SetPublishTf(bool value) { publish_tf_ = value; }
 
     void SetSimulationMode(int loop_rate) {
         simulated_robot_ = true;
@@ -81,7 +82,7 @@ class ScoutMessenger {
     joint_state_msg.name[2] = "rear_left_wheel";
     joint_state_msg.name[3] = "rear_right_wheel";
 
-    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(node_);
+        tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(node_);
     }
 
     void PublishStateToROS() {
@@ -178,6 +179,7 @@ class ScoutMessenger {
     std::string base_frame_;
     std::string odom_topic_name_;
     bool cmd_vel_stamped_ = false;
+    bool publish_tf_ = true;
 
     bool simulated_robot_ = false;
     int sim_control_rate_ = 50;
@@ -324,9 +326,11 @@ class ScoutMessenger {
         tf_msg.transform.translation.z = 0.0;
         tf_msg.transform.rotation = odom_quat;
 
-        tf_broadcaster_->sendTransform(tf_msg);
+        if (publish_tf_ && tf_broadcaster_) {
+            tf_broadcaster_->sendTransform(tf_msg);
+        }
 
-        // publish odometry and tf messages
+        // publish odometry message
         nav_msgs::msg::Odometry odom_msg;
         odom_msg.header.stamp = current_time_;
         odom_msg.header.frame_id = odom_frame_;
