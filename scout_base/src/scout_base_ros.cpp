@@ -171,12 +171,15 @@ void ScoutBaseRos::Run() {
 
     // publish robot state at 50Hz while listening to twist commands
     messenger->SetupSubscription();
+    // Keep one executor for the lifetime of the loop. Creating a fresh
+    // executor via rclcpp::spin_some() every cycle repeatedly add/remove_node's
+    // and is fragile under Jazzy's executor rewrite.
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(shared_from_this());
     AgxControlMode robot_control;
     keep_running_ = true;
     rclcpp::Rate rate(50);
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_node(shared_from_this());
-    while (keep_running_) {
+    while (keep_running_ && rclcpp::ok()) {
       messenger->PublishStateToROS();
       robot_control = robot_->GetRobotState().system_state.control_mode;
       if (auto_reconnect_ && robot_control == CONTROL_MODE_STANDBY) {
@@ -216,11 +219,11 @@ void ScoutBaseRos::Run() {
 
     // publish robot state at 50Hz while listening to twist commands
     messenger->SetupSubscription();
-    rclcpp::Rate rate(50);
-    keep_running_ = true;
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(shared_from_this());
-    while (keep_running_) {
+    rclcpp::Rate rate(50);
+    keep_running_ = true;
+    while (keep_running_ && rclcpp::ok()) {
       messenger->PublishStateToROS();
       executor.spin_some();
       rate.sleep();
