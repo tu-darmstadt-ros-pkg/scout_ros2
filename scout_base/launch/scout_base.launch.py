@@ -24,6 +24,9 @@ def generate_launch_description():
     cmd_vel_stamped_arg = DeclareLaunchArgument('cmd_vel_stamped', default_value='false',
                                                 description='Subscribe TwistStamped instead of Twist on cmd_vel')
 
+    publish_tf_arg = DeclareLaunchArgument('publish_tf', default_value='true',
+                                           description='Broadcast the odom -> base TF')
+
     is_scout_mini_arg = DeclareLaunchArgument('is_scout_mini', default_value='false',
                                           description='Scout mini model')
     is_omni_wheel_arg = DeclareLaunchArgument('is_omni_wheel', default_value='false',
@@ -48,6 +51,7 @@ def generate_launch_description():
                 'base_frame': launch.substitutions.LaunchConfiguration('base_frame'),
                 'odom_topic_name': launch.substitutions.LaunchConfiguration('odom_topic_name'),
                 'cmd_vel_stamped': launch.substitutions.LaunchConfiguration('cmd_vel_stamped'),
+                'publish_tf': launch.substitutions.LaunchConfiguration('publish_tf'),
                 'is_scout_mini': launch.substitutions.LaunchConfiguration('is_scout_mini'),
                 'is_omni_wheel': launch.substitutions.LaunchConfiguration('is_omni_wheel'),
                 'auto_reconnect': launch.substitutions.LaunchConfiguration('auto_reconnect'),
@@ -62,6 +66,7 @@ def generate_launch_description():
         base_link_frame_arg,
         odom_topic_arg,
         cmd_vel_stamped_arg,
+        publish_tf_arg,
         is_scout_mini_arg,
         is_omni_wheel_arg,
         auto_reconnect_arg,

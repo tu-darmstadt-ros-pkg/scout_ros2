@@ -38,6 +38,7 @@ class ScoutMessenger {
     void SetBaseFrame(std::string frame) { base_frame_ = frame; }
     void SetOdometryTopicName(std::string name) { odom_topic_name_ = name; }
     void SetCmdVelStamped(bool value) { cmd_vel_stamped_ = value; }
+    void SetPublishTf(bool value) { publish_tf_ = value; }
 
     void SetSimulationMode(int loop_rate) {
         simulated_robot_ = true;
@@ -81,7 +82,7 @@ class ScoutMessenger {
     joint_state_msg.name[2] = "rear_left_wheel";
     joint_state_msg.name[3] = "rear_right_wheel";
 
-    tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(node_);
+        tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(node_);
     }
 
     void PublishStateToROS() {
@@ -112,30 +113,28 @@ class ScoutMessenger {
 
         auto actuator = scout_->GetActuatorState();
 
+        // Index by slot i: motor_id is uninitialized until the first CAN frame,
+        // so using it as an array index can corrupt the heap.
         for (int i = 0; i < 4; ++i) {
             // actuator_hs_state
-            uint8_t motor_id = actuator.actuator_hs_state[i].motor_id;
-
-            status_msg.actuator_states[motor_id].motor_id = motor_id;
+            status_msg.actuator_states[i].motor_id = static_cast<uint8_t>(i);
             const int16_t rpm = actuator.actuator_hs_state[i].rpm;
-            status_msg.actuator_states[motor_id].rpm = rpm;
-            status_msg.actuator_states[motor_id].current =
+            status_msg.actuator_states[i].rpm = rpm;
+            status_msg.actuator_states[i].current =
               actuator.actuator_hs_state[i].current;
-            status_msg.actuator_states[motor_id].pulse_count =
+            status_msg.actuator_states[i].pulse_count =
               actuator.actuator_hs_state[i].pulse_count;
-            joint_state_msg.velocity[motor_id] = rpm * 2.0 * M_PI / 60.0;
-            joint_state_msg.position[motor_id] += joint_state_msg.velocity[motor_id] * dt;
+            joint_state_msg.velocity[i] = rpm * 2.0 * M_PI / 60.0;
+            joint_state_msg.position[i] += joint_state_msg.velocity[i] * dt;
 
             // actuator_ls_state
-            motor_id = actuator.actuator_ls_state[i].motor_id;
-
-            status_msg.actuator_states[motor_id].driver_voltage =
+            status_msg.actuator_states[i].driver_voltage =
               actuator.actuator_ls_state[i].driver_voltage;
-            status_msg.actuator_states[motor_id].driver_temperature =
+            status_msg.actuator_states[i].driver_temperature =
               actuator.actuator_ls_state[i].driver_temp;
-            status_msg.actuator_states[motor_id].motor_temperature =
+            status_msg.actuator_states[i].motor_temperature =
               actuator.actuator_ls_state[i].motor_temp;
-            status_msg.actuator_states[motor_id].driver_state =
+            status_msg.actuator_states[i].driver_state =
               actuator.actuator_ls_state[i].driver_state;
         }
         joint_state_msg.header.stamp = current_time_;
@@ -178,6 +177,7 @@ class ScoutMessenger {
     std::string base_frame_;
     std::string odom_topic_name_;
     bool cmd_vel_stamped_ = false;
+    bool publish_tf_ = true;
 
     bool simulated_robot_ = false;
     int sim_control_rate_ = 50;
@@ -218,10 +218,15 @@ class ScoutMessenger {
     }
 
     void TwistStampedCmdCallback(const geometry_msgs::msg::TwistStamped::SharedPtr msg) {
-        using namespace std::chrono_literals;
-        if (rclcpp::Time(msg->header.stamp) - node_->get_clock()->now() > 0.5s) {
-            RCLCPP_WARN(node_->get_logger(), "TwistStamped cmd is too old. Maximum allowed is 0.5s, delay was %f",
-                        (rclcpp::Time(msg->header.stamp) - node_->get_clock()->now()).seconds());
+        const auto now = node_->get_clock()->now();
+        // Use the node's clock type so subtraction does not throw on mismatch
+        // (msg stamp defaults to RCL_ROS_TIME, node clock is often SYSTEM_TIME).
+        const auto stamp = rclcpp::Time(msg->header.stamp, now.get_clock_type());
+        const auto age = now - stamp;
+        if (age > rclcpp::Duration::from_seconds(0.5)) {
+            RCLCPP_WARN(node_->get_logger(),
+                        "TwistStamped cmd is too old. Maximum allowed is 0.5s, delay was %f",
+                        age.seconds());
             return;
         }
         if (!simulated_robot_) {
@@ -324,9 +329,11 @@ class ScoutMessenger {
         tf_msg.transform.translation.z = 0.0;
         tf_msg.transform.rotation = odom_quat;
 
-        tf_broadcaster_->sendTransform(tf_msg);
+        if (publish_tf_ && tf_broadcaster_) {
+            tf_broadcaster_->sendTransform(tf_msg);
+        }
 
-        // publish odometry and tf messages
+        // publish odometry message
         nav_msgs::msg::Odometry odom_msg;
         odom_msg.header.stamp = current_time_;
         odom_msg.header.frame_id = odom_frame_;
