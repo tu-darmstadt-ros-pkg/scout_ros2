@@ -63,6 +63,9 @@ install(TARGETS scout_base_node
 
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}/)
+
+install(PROGRAMS scripts/scout_battery_monitor.py
+  DESTINATION lib/${PROJECT_NAME})
   
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
