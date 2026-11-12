@@ -47,15 +47,15 @@ add_executable(scout_base_node
     src/scout_base_ros.cpp
     src/scout_base_node.cpp)
 target_link_libraries(scout_base_node ugv_sdk)
-ament_target_dependencies(scout_base_node
-  rclcpp
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
-  std_msgs
-  nav_msgs
-  sensor_msgs
-  scout_msgs
+target_link_libraries(scout_base_node
+  ${rclcpp_TARGETS}
+  ${tf2_TARGETS}
+  ${tf2_ros_TARGETS}
+  ${tf2_geometry_msgs_TARGETS}
+  ${std_msgs_TARGETS}
+  ${nav_msgs_TARGETS}
+  ${sensor_msgs_TARGETS}
+  ${scout_msgs_TARGETS}
 )
 
 install(TARGETS scout_base_node
